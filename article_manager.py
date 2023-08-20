@@ -68,14 +68,18 @@ class ImageHandler:
             executor.map(self.download_image, img_tags)
 
     def download_image(self, img_tag, base_url):
-        img_url = img_tag.get('src')
-        if not img_url: 
-            return
-        absolute_img_url = urljoin(base_url, img_url)
-        img_save_path = self.utility.generate_image_save_path(absolute_img_url)
+        try:
+            img_url = img_tag.get('src')
+            if not img_url: 
+                return
+            absolute_img_url = urljoin(base_url, img_url)
+            img_save_path = self.utility.generate_image_save_path(absolute_img_url)
         
-        if self.crawler.download_image(absolute_img_url, img_save_path):
-            img_tag['src'] = img_save_path
+            if self.crawler.fetch_image(absolute_img_url, img_save_path):
+                img_tag['src'] = img_save_path
+        except Exception as e:
+            logger.error(f"Failed to fetch_image. Error: {e}")
+
 
 class TOCManager:
     def __init__(self, crawler, utility):
@@ -147,15 +151,18 @@ class ArticleDownloader:
 
         # Download and update image paths
         for img_tag in soup.find_all('img'):
-            img_url = img_tag['src']
-            img_save_path = self.utility.generate_image_save_path(img_url)
-            if self.crawler.download_image(img_url, img_save_path):
-                img_tag['src'] = img_save_path
-            else:
-                img_tag.decompose()  # remove the image tag if failed to download
+            try:
+                img_url = img_tag['src']
+                img_save_path = self.utility.generate_image_save_path(img_url)
+                if self.crawler.fetch_image(img_url, img_save_path):
+                    img_tag['src'] = img_save_path
+                else:
+                    img_tag.decompose()
 
-        content = content_element.prettify() or "no content"
-        return {"title": title, "content": content,"url": url}
+                content = content_element.prettify() or "no content"
+                return {"title": title, "content": content,"url": url}
+            except Exception as e:
+                logger.error(f"Failed to save image. Error: {e}")
 
     def save_article(self, article_data, base_dir="temp"):
         file_name = self.utility.generate_filename_from_url(article_data["url"], 'html')

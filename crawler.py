@@ -50,7 +50,7 @@ class Crawler:
         response = self._make_request('GET', url, **kwargs)
         return response.text if response else None
 
-    def download_image(self, url, save_path, **kwargs):
+    def fetch_image(self, url, save_path, **kwargs):
         response = self._make_request('GET', url, stream=True, **kwargs)
         if response:
             with open(save_path, 'wb') as file:
