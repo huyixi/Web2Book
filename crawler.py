@@ -57,6 +57,8 @@ class Crawler:
             with open(save_path, 'wb') as file:
                 for chunk in response.iter_content(chunk_size=8192):
                     file.write(chunk)
+            return True
+        return False
 
     def print_failed_requests(self):
         if self.failed_requests:

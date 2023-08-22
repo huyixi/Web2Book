@@ -8,7 +8,7 @@ import itertools
 import hashlib
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 class Utility:
@@ -56,7 +56,7 @@ class Utility:
         if not img_url_extension:
             img_url_extension = "jpg"
         img_filename = Utility.generate_filename_from_url(url, img_url_extension)
-        return os.path.join('temp', img_filename)
+        return os.path.join('tmp',img_filename)
 
 class ImageHandler:
     def __init__(self, crawler, utility):
@@ -71,15 +71,29 @@ class ImageHandler:
         try:
             img_url = img_tag.get('src')
             if not img_url: 
+                logger.warning(f"Image tag without src attribute found. Skipping...")
                 return
             absolute_img_url = urljoin(base_url, img_url)
-            img_save_path = self.utility.generate_image_save_path(absolute_img_url)
+            img_save_path = os.path.join(self.utility.generate_image_save_path(absolute_img_url))
         
             if self.crawler.fetch_image(absolute_img_url, img_save_path):
-                img_tag['src'] = img_save_path
+                logger.info(f"Image downloaded from {absolute_img_url}")
+                img_filename = os.path.basename(img_save_path)
+                img_tag['src'] = img_filename
+                return img_save_path
+            else:
+                logger.warning(f"Failed to download image from {absolute_img_url}")
         except Exception as e:
             logger.error(f"Failed to fetch_image. Error: {e}")
 
+    def handle_images_in_content(self, content, base_url):
+        try:
+            soup = BeautifulSoup(content, 'html.parser')
+            for img_tag in soup.find_all('img'):
+                self.download_image(img_tag, base_url)
+            return soup.prettify()
+        except Exception as e:
+            logger.error(f"Failed to download image in content. Error: {e}")
 
 class TOCManager:
     def __init__(self, crawler, utility):
@@ -116,7 +130,7 @@ class TOCManager:
                 break
         return self.toc_list
 
-    def save_toc_to_file(self, base_dir='temp'):
+    def save_toc_to_file(self, base_dir='tmp'):
         filepath = os.path.join(base_dir, "toc.yaml")
         os.makedirs(base_dir, exist_ok=True)
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -126,9 +140,10 @@ class TOCManager:
 
 class ArticleDownloader:
     
-    def __init__(self, crawler, utility):
+    def __init__(self, crawler, utility, image_handler):
         self.crawler = crawler
         self.utility = utility
+        self.image_handler = image_handler
 
     def resolve_url(self, base_url, img_rel_url):
         if img_rel_url.startswith("//"):
@@ -149,38 +164,22 @@ class ArticleDownloader:
         soup = BeautifulSoup(html, 'html.parser')
         title = soup.select_one(title_selector)
         if not title:
-            logger.error(f"Failed to fetch article title from {url}. Skipping...")
-            return None
+            logger.error(f"Failed to fetch article title from {url}.")
+            title = "no title"
         title = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9.,?!]', '', title.text).strip().replace(' ', '-')
 
-
-        # Download and update image paths
-        for img_tag in soup.find_all('img'):
-            try:
-                img_rel_url = img_tag.get('src')
-                if not img_rel_url:
-                    logger.warning(f"Image tag without src found in {url}. Skipping...")
-                else:
-                    img_abs_url = self.resolve_url(url, img_rel_url)
-                    img_save_path = self.utility.generate_image_save_path(img_abs_url)
-                    if self.crawler.fetch_image(img_abs_url, img_save_path):
-                        img_tag['src'] = img_save_path
-                    else:
-                        img_tag.decompose()
-            except Exception as e:
-                logger.error(f"Failed to save image. Error: {e}")
-
-        content_element = soup.select_one(content_selector) or "no content"
+        content_element = soup.select_one(content_selector)
         if content_element:
-            content = content_element.prettify()
+            content = self.image_handler.handle_images_in_content(content_element.prettify(), url)
         else:
-            logger.error(f"Failed to fetch article content from {url}. Skipping...")
+            content = html
+            logger.error(f"Failed to fetch article content from {url}.")
             return None
 
         return {"title": title, "content": content,"url": url}
             
 
-    def save_article(self, article_data, base_dir="temp"):
+    def save_article(self, article_data, base_dir="tmp"):
         file_name = self.utility.generate_filename_from_url(article_data["url"], 'html')
         file_path = os.path.join(base_dir, file_name)
         os.makedirs(base_dir, exist_ok=True)
@@ -191,7 +190,7 @@ class ArticleDownloader:
         except Exception as e:
             logger.error(f"Failed to save article to {file_path}. Error: {e}")
 
-    def download_and_save(self, url, title_selector, content_selector, base_dir="temp"):
+    def download_and_save(self, url, title_selector, content_selector, base_dir="tmp"):
         try:
             article_data = self.fetch_article(url, title_selector, content_selector)
             if article_data:
@@ -209,7 +208,7 @@ class ArticleManager:
         self.toc_manager = toc_manager
         self.article_downloader = article_downloader
     
-    def generate_and_save_toc(self, target_url, link_selector, next_page_selector=None, base_dir='temp'):
+    def generate_and_save_toc(self, target_url, link_selector, next_page_selector=None, base_dir='tmp'):
         """
         Generate the table of contents (TOC) and save it to a YAML file.
         """
@@ -221,7 +220,7 @@ class ArticleManager:
         logger.info(f"TOC saved to {toc_filepath}")
         return toc
 
-    def download_articles(self, toc, title_selector, content_selector, base_dir='temp'):
+    def download_articles(self, toc, title_selector, content_selector, base_dir='tmp'):
         """
         Download articles using the table of contents (TOC).
         """
