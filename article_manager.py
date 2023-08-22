@@ -129,6 +129,15 @@ class ArticleDownloader:
     def __init__(self, crawler, utility):
         self.crawler = crawler
         self.utility = utility
+
+    def resolve_url(self, base_url, img_rel_url):
+        if img_rel_url.startswith("//"):
+            scheme = urlparse(base_url).scheme
+            img_abs_url = f"{scheme}:{img_rel_url}"
+        else:
+            img_abs_url = urljoin(base_url, img_rel_url)
+        return img_abs_url.strip()
+
     
     def fetch_article(self, url, title_selector, content_selector):
         logger.info(f"Fetching article from {url}...")
@@ -142,27 +151,34 @@ class ArticleDownloader:
         if not title:
             logger.error(f"Failed to fetch article title from {url}. Skipping...")
             return None
-        else:
-            title = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9.,?!]', '', title.text).strip().replace(' ', '-')
-        content_element = soup.select_one(content_selector)
-        if not content_element:
-            logger.error(f"Failed to fetch article content from {url}. Skipping...")
-            return None
+        title = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9.,?!]', '', title.text).strip().replace(' ', '-')
+
 
         # Download and update image paths
         for img_tag in soup.find_all('img'):
             try:
-                img_url = img_tag['src']
-                img_save_path = self.utility.generate_image_save_path(img_url)
-                if self.crawler.fetch_image(img_url, img_save_path):
-                    img_tag['src'] = img_save_path
+                img_rel_url = img_tag.get('src')
+                if not img_rel_url:
+                    logger.warning(f"Image tag without src found in {url}. Skipping...")
                 else:
-                    img_tag.decompose()
-
-                content = content_element.prettify() or "no content"
-                return {"title": title, "content": content,"url": url}
+                    img_abs_url = self.resolve_url(url, img_rel_url)
+                    img_save_path = self.utility.generate_image_save_path(img_abs_url)
+                    if self.crawler.fetch_image(img_abs_url, img_save_path):
+                        img_tag['src'] = img_save_path
+                    else:
+                        img_tag.decompose()
             except Exception as e:
                 logger.error(f"Failed to save image. Error: {e}")
+
+        content_element = soup.select_one(content_selector) or "no content"
+        if content_element:
+            content = content_element.prettify()
+        else:
+            logger.error(f"Failed to fetch article content from {url}. Skipping...")
+            return None
+
+        return {"title": title, "content": content,"url": url}
+            
 
     def save_article(self, article_data, base_dir="temp"):
         file_name = self.utility.generate_filename_from_url(article_data["url"], 'html')
@@ -176,12 +192,17 @@ class ArticleDownloader:
             logger.error(f"Failed to save article to {file_path}. Error: {e}")
 
     def download_and_save(self, url, title_selector, content_selector, base_dir="temp"):
-        article_data = self.fetch_article(url, title_selector, content_selector)
-        if article_data:
-            logger.info(f"Article data fetched from {url}. Saving to file...")
-            self.save_article(article_data, base_dir)
-        else:
-            logger.error(f"Failed to fetch article data from {url}. Skipping...")
+        try:
+            article_data = self.fetch_article(url, title_selector, content_selector)
+            if article_data:
+                logger.info(f"Article data fetched from {url}. Saving to file...")
+                self.save_article(article_data, base_dir)
+            else:
+                logger.error(f"Failed to fetch article data from {url}. Skipping...")
+        except Exception as e:
+            error_message = f"Error occurred while downloading and saving article from {url}. Error: {e}"
+            logger.error(error_message)
+            return error_message
 
 class ArticleManager:
     def __init__(self, toc_manager, article_downloader):
