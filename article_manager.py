@@ -154,7 +154,7 @@ class ArticleDownloader:
         return img_abs_url.strip()
 
     
-    def fetch_article(self, url, title_selector, content_selector):
+    def fetch_article(self, url, title_selector, content_selector, remove_selectors):
         logger.info(f"Fetching article from {url}...")
         html = self.crawler.fetch(url)
         if not html:
@@ -167,6 +167,11 @@ class ArticleDownloader:
             logger.error(f"Failed to fetch article title from {url}.")
             title = "no title"
         title = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9.,?!]', '', title.text).strip().replace(' ', '-')
+
+        if remove_selectors:
+            for selector in remove_selectors:
+                for elem in soup.select(selector.strip()):
+                    elem.extract()
 
         content_element = soup.select_one(content_selector)
         if content_element:
