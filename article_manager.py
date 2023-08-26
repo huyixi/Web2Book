@@ -59,9 +59,10 @@ class Utility:
         return os.path.join('tmp',img_filename)
 
 class ImageHandler:
-    def __init__(self, crawler, utility):
+    def __init__(self, crawler, utility, max_retries=5):
         self.crawler = crawler
         self.utility = utility
+        self.max_retries = max_retries
 
     def download_images(self, img_tags):
         with ThreadPoolExecutor(max_workers=20) as executor:
@@ -76,13 +77,19 @@ class ImageHandler:
             absolute_img_url = urljoin(base_url, img_url)
             img_save_path = os.path.join(self.utility.generate_image_save_path(absolute_img_url))
         
-            if self.crawler.fetch_image(absolute_img_url, img_save_path):
-                logger.info(f"Image downloaded from {absolute_img_url}")
-                img_filename = os.path.basename(img_save_path)
-                img_tag['src'] = img_filename
-                return img_save_path
-            else:
-                logger.warning(f"Failed to download image from {absolute_img_url}")
+            for attempt in range(self.max_retries):
+                try:
+                    if self.crawler.fetch_image(absolute_img_url, img_save_path):
+                        logger.info(f"Image downloaded from {absolute_img_url}")
+                        img_filename = os.path.basename(img_save_path)
+                        img_tag['src'] = img_filename
+                        return img_save_path
+                    else:
+                        logger.warning(f"Failed to fetch_image. Error: {e}. Retrying... ({attempt + 1}/{self.max_retries})")
+                except Exception as e:
+                    logger.error(f"Failed to fetch_image. Error: {e}. Retrying... ({attempt + 1}/{self.max_retries})")
+                    if attempt == self.max_retries - 1:
+                        logger.error("Failed to download image from {absolute_img_url} after {self.max_retries} attempts.")
         except Exception as e:
             logger.error(f"Failed to fetch_image. Error: {e}")
 
@@ -195,9 +202,9 @@ class ArticleDownloader:
         except Exception as e:
             logger.error(f"Failed to save article to {file_path}. Error: {e}")
 
-    def download_and_save(self, url, title_selector, content_selector, base_dir="tmp"):
+    def download_and_save(self, url, title_selector, content_selector,remove_selectors, base_dir="tmp"):
         try:
-            article_data = self.fetch_article(url, title_selector, content_selector)
+            article_data = self.fetch_article(url, title_selector, content_selector,remove_selectors)
             if article_data:
                 logger.info(f"Article data fetched from {url}. Saving to file...")
                 self.save_article(article_data, base_dir)
