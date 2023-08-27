@@ -35,15 +35,15 @@ def get_book_metadata():
 
 if __name__ == "__main__":
     utility = Utility()
-    target_url = get_input("Enter the URL of the website to be crawled",default="https://yetanmoney.com/", validate=validate_url)
+    target_url = get_input("Enter the URL of the website to be crawled",default="https://www.practical-go-lessons.com/chap-1-programming-a-computer", validate=validate_url)
     second_level_domain = utility.extract_second_level_domain(target_url)
     target_url = ensure_url_scheme(target_url)
-    article_link_selector = get_input("Enter the CSS selector to find the links",default="h2.entry-title a")
-    next_page_selector = get_input("Enter the CSS selector to find the next page link",default="div.nav-previous a")
+    article_link_selector = get_input("Enter the CSS selector to find the links",default="a")
+    next_page_selector = get_input("Enter the CSS selector to find the next page link",default=None)
     proxy_pool_url = get_input("Enter the URL of the proxy pool", default="http://localhost:5555/random")
-    article_title_selector = get_input("Enter the CSS selector to find the title", default="h1 span")
-    article_content_selector = get_input("Enter the CSS selector to find the content", default="article")
-    remove_selectors = get_input("Enter the CSS selector to remove specify element(Seperate by ;)", default="div.sharedaddy;div.jp-relatedposts")
+    article_title_selector = get_input("Enter the CSS selector to find the title", default="h1")
+    article_content_selector = get_input("Enter the CSS selector to find the content", default="div[role='main']")
+    remove_selectors = get_input("Enter the CSS selector to remove specify element(Seperate by ;)", default=None)
     remove_selectors = [selector.strip() for selector in remove_selectors.split(";")]
     custom_metadata = get_input("Do you want to customize book metadata?", default="n")
     if custom_metadata != "n":
