@@ -20,7 +20,7 @@ class EpubGenerator:
         chapters = []
         added_files = set()
         for entry in toc_list:
-            chapter_title = entry['title']
+            chapter_title = entry['chapter_title']
             chapter_file_name = entry['filename']
             chapter_file_path = os.path.join(self.base_dir, chapter_file_name)
             if chapter_file_name in added_files:
@@ -53,7 +53,7 @@ class EpubGenerator:
                         img.content = f.read()
                     book.add_item(img)
                     
-    def generate_epub(self, toc_list, title, author, language, epub_name,identifier=None):
+    def generate_epub(self, toc_list, book_name, author, language, epub_name,cover_path,identifier=None):
         print("Generating epub...")
         book = epub.EpubBook()
 
@@ -61,9 +61,11 @@ class EpubGenerator:
         if not identifier:
             identifier = self._generate_uuid()
         book.set_identifier(identifier)
-        book.set_title(title)
+        book.set_title(book_name)
         book.set_language(language)
         book.add_author(author)
+        with open(cover_path, 'rb') as cover_file:
+            book.set_cover("cover.jpg", cover_file.read())
 
         # 使用辅助方法添加章节和图片
         chapters = self.add_chapters_to_book(book, toc_list)

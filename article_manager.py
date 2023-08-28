@@ -7,6 +7,7 @@ import yaml
 import itertools
 import hashlib
 import logging
+import matplotlib.pyplot as plt
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
@@ -89,7 +90,7 @@ class ImageHandler:
                 except Exception as e:
                     logger.error(f"Failed to fetch_image. Error: {e}. Retrying... ({attempt + 1}/{self.max_retries})")
                     if attempt == self.max_retries - 1:
-                        logger.error("Failed to download image from {absolute_img_url} after {self.max_retries} attempts.")
+                        logger.error(f"Failed to download image from {absolute_img_url} after {self.max_retries} attempts.")
         except Exception as e:
             logger.error(f"Failed to fetch_image. Error: {e}")
 
@@ -101,6 +102,29 @@ class ImageHandler:
             return soup.prettify()
         except Exception as e:
             logger.error(f"Failed to download image in content. Error: {e}")
+            
+    def generate_book_cover(self, title, size=(1600, 2560), bg_color="white"):
+        # Create a figure and axis with desired size
+        fig, ax = plt.subplots(figsize=(size[0]/100, size[1]/100), dpi=100)
+    
+        # Set the background color
+        ax.set_facecolor(bg_color)
+        fig.patch.set_facecolor(bg_color)
+    
+        # Remove axis
+        ax.axis('off')
+    
+        # Add title text to the center of the figure
+        plt.text(0.5, 0.5, title, color=(0, 0, 0), fontsize=150, ha='center', va='center', transform=ax.transAxes)
+    
+        # Ensure the output directory exists
+        try:
+            if not os.path.exists("tmp"):
+                os.mkdir("tmp")
+            plt.savefig("tmp/cover.jpg", bbox_inches="tight", pad_inches=0, dpi=100)
+            plt.close()
+        except Exception as e:
+            logger.error(f"Failed to generate book cover. Error: {e}")
 
 class TOCManager:
     def __init__(self, crawler, utility):
@@ -113,8 +137,9 @@ class TOCManager:
 
     def get_toc(self, target_url, link_selector, next_page_selector=None):
         while target_url:
-            logger.info(f"Crawling TOC from {target_url}...")
+            logger.info(f"Crawling TOC from {target_url}")
             html = self.crawler.fetch(target_url)
+            self.save_toc_html_to_file(html)
             if not html:
                 logger.error(f"Failed to fetch {target_url}. Skipping...")
                 continue
@@ -126,7 +151,7 @@ class TOCManager:
                     chapter_url = urljoin(target_url, rel_url).strip()
                     chapter_title = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9.,?!]', '', link_tag.text).strip().replace(' ', '-')
                     filename = self._generate_filename_from_url(chapter_url, 'html')
-                    self.toc_list.append({"title": chapter_title, "url": chapter_url, "filename": filename})
+                    self.toc_list.append({"chapter_title": chapter_title, "url": chapter_url, "filename": filename})
             if next_page_selector:
                 next_page = soup.select_one(next_page_selector)
                 if next_page and 'href' in next_page.attrs: 
@@ -136,6 +161,13 @@ class TOCManager:
             else:
                 break
         return self.toc_list
+    
+    def save_toc_html_to_file(self, html, base_dir='tmp'):
+        filepath = os.path.join(base_dir, "toc.html")
+        os.makedirs(base_dir, exist_ok=True)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(html)
+        logger.info(f"TOC HTML saved to {filepath}")
 
     def save_toc_to_file(self, base_dir='tmp'):
         filepath = os.path.join(base_dir, "toc.yaml")
@@ -160,54 +192,57 @@ class ArticleDownloader:
             img_abs_url = urljoin(base_url, img_rel_url)
         return img_abs_url.strip()
 
-    
-    def fetch_article(self, url, title_selector, content_selector, remove_selectors):
+    def fetch_article(self, url, article_selector, remove_selectors):
         logger.info(f"Fetching article from {url}...")
         html = self.crawler.fetch(url)
         if not html:
             logger.error(f"Failed to fetch article content from {url}. Skipping...")
             return None
 
+        # Check if the selector is valid
+        if not article_selector or not isinstance(article_selector, str) or len(article_selector.strip()) == 0:
+            error_message = f"Invalid or empty CSS selector provided for {url}. Please provide a valid selector."
+            logger.error(error_message)
+            return None
+
         soup = BeautifulSoup(html, 'html.parser')
-        title = soup.select_one(title_selector)
-        if not title:
-            logger.error(f"Failed to fetch article title from {url}.")
-            title = "no title"
-        title = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9.,?!]', '', title.text).strip().replace(' ', '-')
 
         if remove_selectors:
-            for selector in remove_selectors:
-                for elem in soup.select(selector.strip()):
-                    elem.extract()
-
-        content_element = soup.select_one(content_selector)
-        if content_element:
-            content = self.image_handler.handle_images_in_content(content_element.prettify(), url)
+            try:
+                for selector in remove_selectors:
+                    if selector:
+                        for elem in soup.select(selector.strip()):
+                            elem.extract()
+            except Exception as e:
+                logger.error(f"Error removing elements with selector '{selector}': {e}")
+        
+        article_element = soup.select_one(article_selector)
+        if article_element:
+            article = self.image_handler.handle_images_in_content(article_element.prettify(), url)
         else:
-            content = html
+            article = html
             logger.error(f"Failed to fetch article content from {url}.")
             return None
 
-        return {"title": title, "content": content,"url": url}
-            
+        return article
 
-    def save_article(self, article_data, base_dir="tmp"):
-        file_name = self.utility.generate_filename_from_url(article_data["url"], 'html')
+    def save_article(self, url, article, base_dir="tmp"):
+        file_name = self.utility.generate_filename_from_url(url, 'html')
         file_path = os.path.join(base_dir, file_name)
         os.makedirs(base_dir, exist_ok=True)
         try:
             with open(file_path, 'w', encoding='utf-8') as file:
-                file.write(article_data["content"])
+                file.write(article)
             logger.info(f"Article saved to {file_path}")
         except Exception as e:
             logger.error(f"Failed to save article to {file_path}. Error: {e}")
 
-    def download_and_save(self, url, title_selector, content_selector,remove_selectors, base_dir="tmp"):
+    def download_and_save(self, url, article_selector, remove_selectors, base_dir="tmp"):
         try:
-            article_data = self.fetch_article(url, title_selector, content_selector,remove_selectors)
-            if article_data:
+            article = self.fetch_article(url, article_selector, remove_selectors)
+            if article:
                 logger.info(f"Article data fetched from {url}. Saving to file...")
-                self.save_article(article_data, base_dir)
+                self.save_article(url, article, base_dir)
             else:
                 logger.error(f"Failed to fetch article data from {url}. Skipping...")
         except Exception as e:
@@ -221,9 +256,6 @@ class ArticleManager:
         self.article_downloader = article_downloader
     
     def generate_and_save_toc(self, target_url, link_selector, next_page_selector=None, base_dir='tmp'):
-        """
-        Generate the table of contents (TOC) and save it to a YAML file.
-        """
         toc = self.toc_manager.get_toc(target_url, link_selector, next_page_selector)
         toc_filepath = os.path.join(base_dir, "toc.yaml")
         os.makedirs(base_dir, exist_ok=True)
@@ -232,10 +264,7 @@ class ArticleManager:
         logger.info(f"TOC saved to {toc_filepath}")
         return toc
 
-    def download_articles(self, toc, title_selector, content_selector, base_dir='tmp'):
-        """
-        Download articles using the table of contents (TOC).
-        """
+    def download_articles(self, toc, article_selector, base_dir='tmp'):
         logger.info(f"Starting to download articles... Total articles: {len(toc)}")
         urls = [chapter['url'] for chapter in toc]
         if not urls:
@@ -243,8 +272,8 @@ class ArticleManager:
             return
 
         with ThreadPoolExecutor(max_workers=20) as executor:
-            results = executor.map(self.article_downloader.download_and_save, urls, 
-                        itertools.repeat(title_selector), itertools.repeat(content_selector), 
+            results = executor.map(self.article_downloader.download_and_save, urls,
+                        itertools.repeat(article_selector), 
                         itertools.repeat(base_dir))
         # Check if any exceptions occurred in the threads
         for result in results:

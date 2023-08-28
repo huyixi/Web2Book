@@ -35,16 +35,15 @@ def get_book_metadata():
 
 if __name__ == "__main__":
     utility = Utility()
-    target_url = get_input("Enter the URL of the website to be crawled",default="https://www.practical-go-lessons.com/chap-1-programming-a-computer", validate=validate_url)
+    target_url = get_input("Enter the URL of the website to be crawled",default="https://wangdoc.com/es6/", validate=validate_url)
     second_level_domain = utility.extract_second_level_domain(target_url)
     target_url = ensure_url_scheme(target_url)
-    article_link_selector = get_input("Enter the CSS selector to find the links",default="a")
+    article_link_selector = get_input("Enter the CSS selector to find the links",default="ul.menu-list li a")
     next_page_selector = get_input("Enter the CSS selector to find the next page link",default=None)
-    proxy_pool_url = get_input("Enter the URL of the proxy pool", default="http://localhost:5555/random")
-    article_title_selector = get_input("Enter the CSS selector to find the title", default="h1")
-    article_content_selector = get_input("Enter the CSS selector to find the content", default="div[role='main']")
+    article_selector = get_input("Enter the CSS selector to find the content", default="article")
     remove_selectors = get_input("Enter the CSS selector to remove specify element(Seperate by ;)", default=None)
     remove_selectors = [selector.strip() for selector in remove_selectors.split(";")]
+    proxy_pool_url = get_input("Enter the URL of the proxy pool", default="http://localhost:5555/random")
     custom_metadata = get_input("Do you want to customize book metadata?", default="n")
     if custom_metadata != "n":
         metadata = get_book_metadata()
@@ -56,8 +55,9 @@ if __name__ == "__main__":
     toc_manager = TOCManager(crawler, utility)
     article_downloader = ArticleDownloader(crawler, utility, image_handler)
     article_manager = ArticleManager(toc_manager, article_downloader)
-
+    
     toc = article_manager.generate_and_save_toc(target_url, article_link_selector, next_page_selector)
-    article_manager.download_articles(toc, article_title_selector, article_content_selector,remove_selectors)
-    epub_generator = EpubGenerator('tmp')
-    epub_generator.generate_epub(toc_list = toc, title = second_level_domain, author = second_level_domain, language = metadata['book_language'],epub_name=second_level_domain)
+    article_manager.download_articles(toc, article_selector, remove_selectors)
+    epub_generator = EpubGenerator('tmp/')
+    image_handler.generate_book_cover(second_level_domain)
+    epub_generator.generate_epub(toc_list = toc, book_name = second_level_domain, author = second_level_domain, language = metadata['book_language'],epub_name=second_level_domain, cover_path="tmp/cover.jpg")
