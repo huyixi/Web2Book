@@ -4,8 +4,9 @@ import uuid
 
 class EpubGenerator:
     
-    def __init__(self, base_dir):
+    def __init__(self, base_dir, output_dir=None):
         self.base_dir = base_dir
+        self.output_dir = output_dir if output_dir else base_dir
         self.IMAGE_EXTENSIONS = {
         '.png': 'image/png',
         '.jpg': 'image/jpeg',
@@ -55,6 +56,9 @@ class EpubGenerator:
                     
     def generate_epub(self, toc_list, book_name, author, language, epub_name,cover_path,identifier=None):
         print("Generating epub...")
+        # 创建保存目录
+        os.makedirs(self.output_dir,exist_ok=True)
+
         book = epub.EpubBook()
 
         # 设置书籍的基本元数据
@@ -82,8 +86,8 @@ class EpubGenerator:
         book.toc = toc_links
 
         # 将书写入一个EPUB文件
-        epub_name = os.path.join(self.base_dir, epub_name+'.epub')
-        epub.write_epub(epub_name, book)
+        epub_path = os.path.join(self.output_dir, epub_name+'.epub')
+        epub.write_epub(epub_path, book)
 
-        print(f"EPUB generated at {epub_name}")
+        print(f"EPUB generated at {epub_path}")
                 

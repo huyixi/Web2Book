@@ -35,12 +35,12 @@ def get_book_metadata():
 
 if __name__ == "__main__":
     utility = Utility()
-    target_url = get_input("Enter the URL of the website to be crawled",default="https://developer.chrome.com/docs/extensions/mv3/", validate=validate_url)
+    target_url = get_input("Enter the URL of the website to be crawled",default=None, validate=validate_url)
     second_level_domain = utility.extract_second_level_domain(target_url)
     target_url = ensure_url_scheme(target_url)
-    article_link_selector = get_input("Enter the CSS selector to find the links",default="a.navigation-tree__link")
+    article_link_selector = get_input("Enter the CSS selector to find the links",default=None)
     next_page_selector = get_input("Enter the CSS selector to find the next page link",default=None)
-    article_selector = get_input("Enter the CSS selector to find the content", default="article")
+    article_selector = get_input("Enter the CSS selector to find the content", default=None)
     remove_selectors = get_input("Enter the CSS selector to remove specify element(Seperate by ;)", default=None)
     remove_selectors = [selector.strip() for selector in remove_selectors.split(";")]
     proxy_pool_url = get_input("Enter the URL of the proxy pool", default="http://localhost:5555/random")
@@ -58,6 +58,6 @@ if __name__ == "__main__":
     
     toc = article_manager.generate_and_save_toc(target_url, article_link_selector, next_page_selector)
     article_manager.download_articles(toc, article_selector, remove_selectors)
-    epub_generator = EpubGenerator('tmp/')
+    epub_generator = EpubGenerator(base_dir='tmp/',output_dir='book/')
     image_handler.generate_book_cover(second_level_domain)
     epub_generator.generate_epub(toc_list = toc, book_name = second_level_domain, author = second_level_domain, language = metadata['book_language'],epub_name=second_level_domain, cover_path="tmp/cover.jpg")

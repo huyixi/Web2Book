@@ -86,7 +86,7 @@ class ImageHandler:
                         img_tag['src'] = img_filename
                         return img_save_path
                     else:
-                        logger.warning(f"Failed to fetch_image. Error: {e}. Retrying... ({attempt + 1}/{self.max_retries})")
+                        logger.warning(f"Failed to fetch_image. Retrying... ({attempt + 1}/{self.max_retries})")
                 except Exception as e:
                     logger.error(f"Failed to fetch_image. Error: {e}. Retrying... ({attempt + 1}/{self.max_retries})")
                     if attempt == self.max_retries - 1:
