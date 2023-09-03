@@ -60,7 +60,7 @@ class Utility:
         return os.path.join('tmp',img_filename)
 
 class ImageHandler:
-    def __init__(self, crawler, utility, max_retries=5):
+    def __init__(self, crawler, utility, max_retries=3):
         self.crawler = crawler
         self.utility = utility
         self.max_retries = max_retries
