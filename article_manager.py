@@ -24,11 +24,11 @@ class Utility:
             os.makedirs(directory)
 
     @staticmethod
-    def write_to_file(file_path, content):
+    def write_to_file(file_path, content,encoding):
         """Write content to the specified file path."""
         directory = os.path.dirname(file_path)
         Utility.ensure_directory_exists(directory)
-        with open(file_path, 'w', encoding='utf-8') as f:
+        with open(file_path, 'w', encoding=encoding) as f:
             f.write(content)
 
     @staticmethod
@@ -139,17 +139,19 @@ class TOCManager:
         while target_url:
             logger.info(f"Crawling TOC from {target_url}")
             html = self.crawler.fetch(target_url)
-            self.save_toc_html_to_file(html)
+            content = html["content"]
+            encoding = html["encoding"]
+            self.save_toc_html_to_file(content,encoding)
             if not html:
                 logger.error(f"Failed to fetch {target_url}. Skipping...")
                 continue
-            soup = BeautifulSoup(html, 'html.parser')
+            soup = BeautifulSoup(content, 'html.parser')
             link_tags = soup.select(link_selector)
             for link_tag in link_tags:
                 if 'href' in link_tag.attrs:
                     rel_url = link_tag['href']
                     chapter_url = urljoin(target_url, rel_url).strip()
-                    chapter_title = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9.,?!]', '', link_tag.text).strip().replace(' ', '-')
+                    chapter_title = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9.,?!_-]', '', link_tag.text.strip().replace(' ', '_'))
                     filename = self._generate_filename_from_url(chapter_url, 'html')
                     self.toc_list.append({"chapter_title": chapter_title, "url": chapter_url, "filename": filename})
             if next_page_selector:
@@ -160,19 +162,19 @@ class TOCManager:
                     target_url = None
             else:
                 break
-        return self.toc_list
+        return {"toc":self.toc_list, "encoding": encoding}
     
-    def save_toc_html_to_file(self, html, base_dir='tmp'):
+    def save_toc_html_to_file(self, html, encoding, base_dir='tmp'):
         filepath = os.path.join(base_dir, "toc.html")
         os.makedirs(base_dir, exist_ok=True)
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, 'w', encoding=encoding) as f:
             f.write(html)
         logger.info(f"TOC HTML saved to {filepath}")
 
-    def save_toc_to_file(self, base_dir='tmp'):
+    def save_toc_to_file(self,encoding, base_dir='tmp'):
         filepath = os.path.join(base_dir, "toc.yaml")
         os.makedirs(base_dir, exist_ok=True)
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, 'w', encoding=encoding) as f:
             yaml.dump(self.toc_list, f, allow_unicode=True)
         logger.info(f"TOC saved to {filepath}")
         return filepath
@@ -195,6 +197,8 @@ class ArticleDownloader:
     def fetch_article(self, url, article_selector, remove_selectors):
         logger.info(f"Fetching article from {url}...")
         html = self.crawler.fetch(url)
+        content = html["content"]
+        encoding = html["encoding"]
         if not html:
             logger.error(f"Failed to fetch article content from {url}. Skipping...")
             return None
@@ -205,7 +209,7 @@ class ArticleDownloader:
             logger.error(error_message)
             return None
 
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(content, 'html.parser')
 
         if remove_selectors:
             try:
@@ -220,29 +224,29 @@ class ArticleDownloader:
         if article_element:
             article = self.image_handler.handle_images_in_content(article_element.prettify(), url)
         else:
-            article = html
+            article = content
             logger.error(f"Failed to fetch article content from {url}.")
             return None
 
-        return article
+        return {"content": article, "encoding": encoding}
 
-    def save_article(self, url, article, base_dir="tmp"):
+    def save_article(self, url, content ,encoding, base_dir="tmp"):
         file_name = self.utility.generate_filename_from_url(url, 'html')
         file_path = os.path.join(base_dir, file_name)
         os.makedirs(base_dir, exist_ok=True)
         try:
-            with open(file_path, 'w', encoding='utf-8') as file:
-                file.write(article)
+            with open(file_path, 'w', encoding=encoding) as file:
+                file.write(content)
             logger.info(f"Article saved to {file_path}")
         except Exception as e:
             logger.error(f"Failed to save article to {file_path}. Error: {e}")
 
     def download_and_save(self, url, article_selector, remove_selectors, base_dir="tmp"):
         try:
-            article = self.fetch_article(url, article_selector, remove_selectors)
-            if article:
+            html = self.fetch_article(url, article_selector, remove_selectors)
+            if html:
                 logger.info(f"Article data fetched from {url}. Saving to file...")
-                self.save_article(url, article, base_dir)
+                self.save_article(url, html["content"],html["encoding"], base_dir)
             else:
                 logger.error(f"Failed to fetch article data from {url}. Skipping...")
         except Exception as e:
@@ -256,10 +260,12 @@ class ArticleManager:
         self.article_downloader = article_downloader
     
     def generate_and_save_toc(self, target_url, link_selector, next_page_selector=None, base_dir='tmp'):
-        toc = self.toc_manager.get_toc(target_url, link_selector, next_page_selector)
+        toc_data = self.toc_manager.get_toc(target_url, link_selector, next_page_selector)
+        toc = toc_data["toc"]
+        toc_encoding = toc_data["encoding"]
         toc_filepath = os.path.join(base_dir, "toc.yaml")
         os.makedirs(base_dir, exist_ok=True)
-        with open(toc_filepath, 'w', encoding='utf-8') as f:
+        with open(toc_filepath, 'w', encoding=toc_encoding) as f:
             yaml.dump(toc, f, allow_unicode=True)
         logger.info(f"TOC saved to {toc_filepath}")
         return toc

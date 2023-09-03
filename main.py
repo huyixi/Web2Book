@@ -35,10 +35,10 @@ def get_book_metadata():
 
 if __name__ == "__main__":
     utility = Utility()
-    target_url = get_input("Enter the URL of the website to be crawled",default="https://wangdoc.com/es6/", validate=validate_url)
+    target_url = get_input("Enter the URL of the website to be crawled",default="https://developer.chrome.com/docs/extensions/mv3/", validate=validate_url)
     second_level_domain = utility.extract_second_level_domain(target_url)
     target_url = ensure_url_scheme(target_url)
-    article_link_selector = get_input("Enter the CSS selector to find the links",default="ul.menu-list li a")
+    article_link_selector = get_input("Enter the CSS selector to find the links",default="a.navigation-tree__link")
     next_page_selector = get_input("Enter the CSS selector to find the next page link",default=None)
     article_selector = get_input("Enter the CSS selector to find the content", default="article")
     remove_selectors = get_input("Enter the CSS selector to remove specify element(Seperate by ;)", default=None)
