@@ -141,7 +141,7 @@ class TOCManager:
             html = self.crawler.fetch(target_url)
             content = html["content"]
             encoding = html["encoding"]
-            self.save_toc_html_to_file(content,encoding)
+            self.save_toc_html_to_file(content, encoding)
             if not html:
                 logger.error(f"Failed to fetch {target_url}. Skipping...")
                 continue
@@ -167,7 +167,7 @@ class TOCManager:
     def save_toc_html_to_file(self, html, encoding, base_dir='tmp'):
         filepath = os.path.join(base_dir, "toc.html")
         os.makedirs(base_dir, exist_ok=True)
-        with open(filepath, 'w', encoding=encoding) as f:
+        with open(filepath, 'w', encoding='utf-8') as f:
             f.write(html)
         logger.info(f"TOC HTML saved to {filepath}")
 

@@ -66,9 +66,18 @@ class Crawler:
             return None
             
     def fetch(self, url, **kwargs):
-        response = self._make_request('GET', url, **kwargs)
-        response.encoding = response.apparent_encoding or 'utf-8'
-        return {"content":response.text, "encoding": response.encoding} if response else None
+        try:
+            response = self._make_request('GET', url, **kwargs)
+            encoding = response.encoding
+            try:
+                response.text.encode(response.apparent_encoding)
+                encoding = response.apparent_encoding
+            except:
+                encoding = 'utf-8'
+            response.encoding = encoding
+            return {"content": response.text, "encoding": encoding} if response else None
+        except Exception as e:
+            return None
 
     def fetch_image(self, url, save_path, **kwargs):
         response = self._make_request('GET', url, stream=True, **kwargs)
