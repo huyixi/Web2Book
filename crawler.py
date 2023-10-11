@@ -22,8 +22,8 @@ class Crawler:
 
     def _wait_time(self, attempt, backoff_factor=2):
         return backoff_factor ** attempt
-
-    def _make_request(self, method, url, timeout=(5, 15), **kwargs):
+    
+    def _make_request(self, method, url, timeout=(5, 10), **kwargs):
         headers = kwargs.pop('headers', {})
         headers['User-Agent'] = self.ua.random
         proxies = {}
@@ -45,15 +45,49 @@ class Crawler:
                 else:
                     self.failed_requests.append((url, str(e)))
                     logger.error(f"Request failed for URL: {url} with error: {e}")
+                    return None  # 直接返回None，表示请求失败
 
             except requests.RequestException as e:
                 if attempt == self.max_retries:
                     self.failed_requests.append((url, str(e)))
                     logger.error(f"Request failed for URL: {url} with error: {e}")
+                    return None  # 直接返回None，表示请求失败
                 else:
                     wait_time = self._wait_time(attempt)
                     logger.info(f"Retrying in {wait_time}s...")
                     time.sleep(wait_time)
+
+    # def _make_request(self, method, url, timeout=(5, 15), **kwargs):
+    #     headers = kwargs.pop('headers', {})
+    #     headers['User-Agent'] = self.ua.random
+    #     proxies = {}
+
+    #     if self.proxy_pool_url:
+    #         proxy_address = self._get_proxy()
+    #         proxies = {'http': 'http://' + proxy_address}
+        
+    #     for attempt in range(self.max_retries + 1):
+    #         try:
+    #             response = self.session.request(method, url, headers=headers, proxies=proxies, timeout=timeout, **kwargs)
+    #             response.raise_for_status()
+    #             return response
+            
+    #         except requests.Timeout as e:
+    #             new_timeout = self.handle_timeout(url, timeout)
+    #             if new_timeout:
+    #                 timeout = new_timeout
+    #             else:
+    #                 self.failed_requests.append((url, str(e)))
+    #                 logger.error(f"Request failed for URL: {url} with error: {e}")
+
+    #         except requests.RequestException as e:
+    #             if attempt == self.max_retries:
+    #                 self.failed_requests.append((url, str(e)))
+    #                 logger.error(f"Request failed for URL: {url} with error: {e}")
+    #             else:
+    #                 wait_time = self._wait_time(attempt)
+    #                 logger.info(f"Retrying in {wait_time}s...")
+    #                 time.sleep(wait_time)
 
     def handle_timeout(self, url, timeout):            
         questions = [

@@ -68,7 +68,7 @@ class ImageHandler:
     def download_images(self, img_tags):
         with ThreadPoolExecutor(max_workers=20) as executor:
             executor.map(self.download_image, img_tags)
-
+    
     def download_image(self, img_tag, base_url):
         try:
             img_url = img_tag.get('src')
@@ -86,13 +86,40 @@ class ImageHandler:
                         img_tag['src'] = img_filename
                         return img_save_path
                     else:
-                        logger.warning(f"Failed to fetch_image. Retrying... ({attempt + 1}/{self.max_retries})")
+                        logger.warning(f"Failed to fetch_image from {absolute_img_url}. Retrying... ({attempt + 1}/{self.max_retries})")
                 except Exception as e:
-                    logger.error(f"Failed to fetch_image. Error: {e}. Retrying... ({attempt + 1}/{self.max_retries})")
+                    logger.error(f"Failed to fetch_image from {absolute_img_url}. Error: {e}. Retrying... ({attempt + 1}/{self.max_retries})")
                     if attempt == self.max_retries - 1:
-                        logger.error(f"Failed to download image from {absolute_img_url} after {self.max_retries} attempts.")
+                        logger.error(f"Failed to download image from {absolute_img_url} after {self.max_retries} attempts. Skipping...")
+                        return
         except Exception as e:
-            logger.error(f"Failed to fetch_image. Error: {e}")
+            logger.error(f"Failed to fetch_image from {absolute_img_url}. Error: {e}. Skipping...")
+            return
+
+    # def download_image(self, img_tag, base_url):
+    #     try:
+    #         img_url = img_tag.get('src')
+    #         if not img_url: 
+    #             logger.warning(f"Image tag without src attribute found. Skipping...")
+    #             return
+    #         absolute_img_url = urljoin(base_url, img_url)
+    #         img_save_path = os.path.join(self.utility.generate_image_save_path(absolute_img_url))
+        
+    #         for attempt in range(self.max_retries):
+    #             try:
+    #                 if self.crawler.fetch_image(absolute_img_url, img_save_path):
+    #                     logger.info(f"Image downloaded from {absolute_img_url}")
+    #                     img_filename = os.path.basename(img_save_path)
+    #                     img_tag['src'] = img_filename
+    #                     return img_save_path
+    #                 else:
+    #                     logger.warning(f"Failed to fetch_image. Retrying... ({attempt + 1}/{self.max_retries})")
+    #             except Exception as e:
+    #                 logger.error(f"Failed to fetch_image. Error: {e}. Retrying... ({attempt + 1}/{self.max_retries})")
+    #                 if attempt == self.max_retries - 1:
+    #                     logger.error(f"Failed to download image from {absolute_img_url} after {self.max_retries} attempts.")
+    #     except Exception as e:
+    #         logger.error(f"Failed to fetch_image. Error: {e}")
 
     def handle_images_in_content(self, content, base_url):
         try:
@@ -194,6 +221,43 @@ class ArticleDownloader:
             img_abs_url = urljoin(base_url, img_rel_url)
         return img_abs_url.strip()
 
+    # def fetch_article(self, url, article_selector, remove_selectors):
+    #     logger.info(f"Fetching article from {url}...")
+    #     html = self.crawler.fetch(url)
+    #     content = html["content"]
+    #     encoding = html["encoding"]
+    #     if not html:
+    #         logger.error(f"Failed to fetch article content from {url}. Skipping...")
+    #         return None
+
+    #     # Check if the selector is valid
+    #     if not article_selector or not isinstance(article_selector, str) or len(article_selector.strip()) == 0:
+    #         error_message = f"Invalid or empty CSS selector provided for {url}. Please provide a valid selector."
+    #         logger.error(error_message)
+    #         return None
+
+    #     soup = BeautifulSoup(content, 'html.parser')
+
+    #     if remove_selectors:
+    #         try:
+    #             for selector in remove_selectors:
+    #                 if selector:
+    #                     for elem in soup.select(selector.strip()):
+    #                         elem.extract()
+    #         except Exception as e:
+    #             logger.error(f"Error removing elements with selector '{selector}': {e}")
+        
+    #     article_element = soup.select_one(article_selector)
+    #     if article_element:
+    #         article = self.image_handler.handle_images_in_content(article_element.prettify(), url)
+    #     else:
+    #         article = content
+    #         logger.error(f"Failed to fetch article content from {url}.")
+    #         return None
+
+    #     return {"content": article, "encoding": encoding}
+
+
     def fetch_article(self, url, article_selector, remove_selectors):
         logger.info(f"Fetching article from {url}...")
         html = self.crawler.fetch(url)
@@ -219,14 +283,17 @@ class ArticleDownloader:
                             elem.extract()
             except Exception as e:
                 logger.error(f"Error removing elements with selector '{selector}': {e}")
-        
-        article_element = soup.select_one(article_selector)
-        if article_element:
-            article = self.image_handler.handle_images_in_content(article_element.prettify(), url)
-        else:
-            article = content
-            logger.error(f"Failed to fetch article content from {url}.")
-            return None
+
+        try:
+            article_element = soup.select_one(article_selector)
+            if article_element:
+                article = self.image_handler.handle_images_in_content(article_element.prettify(), url)
+            else:
+                article = content
+                logger.error(f"Failed to fetch article content from {url}. Returning the raw content.")
+        except Exception as e:
+            logger.error(f"Error while processing article from {url}. Error: {e}")
+            article = content  # 如果处理文章中的图片或其他内容时出错，仍然返回基本内容
 
         return {"content": article, "encoding": encoding}
 
@@ -241,18 +308,37 @@ class ArticleDownloader:
         except Exception as e:
             logger.error(f"Failed to save article to {file_path}. Error: {e}")
 
+    # def download_and_save(self, url, article_selector, remove_selectors, base_dir="tmp"):
+    #     try:
+    #         html = self.fetch_article(url, article_selector, remove_selectors)
+    #         if html:
+    #             logger.info(f"Article data fetched from {url}. Saving to file...")
+    #             self.save_article(url, html["content"],html["encoding"], base_dir)
+    #         else:
+    #             logger.error(f"Failed to fetch article data from {url}. Skipping...")
+    #     except Exception as e:
+    #         error_message = f"Error occurred while downloading and saving article from {url}. Error: {e}"
+    #         logger.error(error_message)
+    #         return error_message
+    
     def download_and_save(self, url, article_selector, remove_selectors, base_dir="tmp"):
-        try:
-            html = self.fetch_article(url, article_selector, remove_selectors)
-            if html:
-                logger.info(f"Article data fetched from {url}. Saving to file...")
-                self.save_article(url, html["content"],html["encoding"], base_dir)
-            else:
-                logger.error(f"Failed to fetch article data from {url}. Skipping...")
-        except Exception as e:
-            error_message = f"Error occurred while downloading and saving article from {url}. Error: {e}"
-            logger.error(error_message)
-            return error_message
+            try:
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(self.fetch_article, url, article_selector, remove_selectors)
+                    html = future.result(timeout=10)  # 设置10秒的超时时间
+                
+                    if html:
+                        logger.info(f"从 {url} 获取到了文章数据。正在保存到文件中...")
+                        self.save_article(url, html["content"], html["encoding"], base_dir)
+                    else:
+                        logger.error(f"无法从 {url} 获取文章数据。跳过...")
+            except TimeoutError:
+                logger.error(f"从 {url} 下载文章超出了10秒。中断下载并跳过这篇文章...")
+            except Exception as e:
+                error_message = f"从 {url} 下载并保存文章时发生了错误。错误: {e}"
+                logger.error(error_message)
+                return error_message
+
 
 class ArticleManager:
     def __init__(self, toc_manager, article_downloader):
