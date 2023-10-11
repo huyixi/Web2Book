@@ -4,7 +4,10 @@ import re
 from crawler import Crawler
 from article_manager import ArticleManager, TOCManager, ArticleDownloader, Utility, ImageHandler
 from epub_generator import EpubGenerator
-
+import os
+import subprocess
+import time
+from multiprocessing import Process
 
 def get_input(message, default=None, validate=None):
     if validate:
@@ -32,6 +35,29 @@ def get_book_metadata():
         'book_identifier': get_input("Enter a unique identifier for the book (or press Enter to generate one)", default=None),
         'output_filename': get_input("Enter the output filename (without extension)", default="output")
     }
+    
+def run_redis_instance():
+    try:
+        os.environ['PROXYPOOL_REDIS_HOST'] = 'localhost'
+        os.environ['PROXYPOOL_REDIS_PORT'] = '6379'
+        os.environ['PROXYPOOL_REDIS_PASSWORD'] = ''
+        os.environ['PROXYPOOL_REDIS_DB'] = '0'
+        # Run Redis in the background
+        subprocess.Popen(["redis-server"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        
+        print("Redis instance started successfully.")
+    except Exception as e:
+        print("An error occurred while setting environment variables")
+
+def run_proxy_pool():
+    try:
+        run_redis_instance()
+        os.chdir("proxypool")
+        subprocess.run(["python3", "run.py"])
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred while running docker-compose up: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
 
 if __name__ == "__main__":
     utility = Utility()
@@ -49,7 +75,7 @@ if __name__ == "__main__":
         metadata = get_book_metadata()
     else:
         metadata = {'book_language':'zh'}
-
+    
     crawler = Crawler(proxy_pool_url)
     image_handler = ImageHandler(crawler, utility)
     toc_manager = TOCManager(crawler, utility)
