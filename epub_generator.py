@@ -88,6 +88,8 @@ class EpubGenerator:
         # 将书写入一个EPUB文件
         epub_path = os.path.join(self.output_dir, epub_name+'.epub')
         epub.write_epub(epub_path, book)
+        epub_path_absolute = os.path.abspath(epub_path)
 
         print(f"EPUB generated at {epub_path}")
+        print(f"EPUB generated at {epub_path_absolute}")
                 
